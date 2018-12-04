@@ -1,0 +1,147 @@
+#kind: PersistentVolumeClaim
+#apiVersion: v1
+#metadata:
+#  name: phabricator
+#  namespace: aitech
+#spec:
+#  storageClassName: cephfs
+#  accessModes:
+#    - ReadWriteMany
+#  resources:
+#    requests:
+#      storage: 5Gi
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  labels:
+    app: phabricator
+  name: phabricator
+  namespace: aitech
+data:
+  local.json: | 
+    {
+      "phabricator.show-prototypes": true,
+      "phpmailer.smtp-password": "",
+      "phpmailer.smtp-user": "",
+      "phpmailer.smtp-protocol": "SSL",
+      "phpmailer.smtp-port": 465,
+      "phpmailer.smtp-host": "smtp.exmail.qq.com",
+      "load-libraries": {
+        "sprint": "/repos/sprint/phabricator-extensions-Sprint/src"
+      },
+      "notification.servers": [
+        {
+          "type": "client",
+          "host": "phabricator.aitech.192.168.12.187.xip.io",
+          "port": 80,
+          "protocol": "http",
+          "path": "/ws/"
+        },
+        {
+          "type": "admin",
+          "host": "127.0.0.1",
+          "port": 22281,
+          "protocol": "http"
+        }
+      ],
+      "storage.mysql-engine.max-size": 67108864,
+      "repository.default-local-path": "/repos",
+      "pygments.enabled": true,
+      "diffusion.ssh-user": "git",
+      "phd.user": "git",
+      "phabricator.base-uri": "http://phabricator.aitech.192.168.12.187.xip.io/",
+      "storage.default-namespace": "phabricator",
+      "mysql.pass": "root",
+      "mysql.user": "root",
+      "mysql.port": "3306",
+      "mysql.host": "192.168.12.199"
+    }
+
+---
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name:  phabricator
+  namespace: aitech
+  labels:
+    app: phabricator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: phabricator
+  template:
+    metadata:
+      labels:
+        app: phabricator
+    spec:
+      containers:
+      - image:  redpointgames/phabricator
+        name: phabricator
+        env:
+        - name:  MYSQL_HOST
+          value: 192.168.12.199  
+        - name: MYSQL_PORT
+          value: '3306'
+        - name: MYSQL_USER
+          value: root 
+        - name: MYSQL_PASS
+          value: root
+        - name: PHABRICATOR_REPOSITORY_PATH
+          value: /repos
+        - name: PHABRICATOR_HOST 
+          value: phabricator.aitech.192.168.12.187.xip.io
+        ports:
+        - containerPort:  80
+          name:  http
+        lifecycle:
+          postStart:
+            exec:
+              command: ["/bin/sh", "-c", "sleep 20; cp /local_configs/local.json /srv/phabricator/phabricator/conf/local/local.json"]
+        volumeMounts:
+        - mountPath: /repos
+          name: data
+        - name: config
+          mountPath: /local_configs/local.json 
+          subPath: local.json
+
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: phabricator
+      - name: config
+        configMap:
+          name: phabricator
+---
+
+kind: Service
+apiVersion: v1
+metadata:
+  name:  phabricator
+  namespace: aitech
+spec:
+  selector:
+   app: phabricator
+  ports:
+  - name:  http
+    port:  80
+    targetPort:  80
+
+---
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: phabricator
+  namespace: aitech
+  # annotations:
+  #   nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  rules:
+  - host: phabricator.aitech.192.168.12.187.xip.io
+    http:
+      paths:
+      - path: /
+        backend:
+          serviceName: phabricator
+          servicePort: 80
