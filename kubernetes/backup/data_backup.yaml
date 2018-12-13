@@ -1,0 +1,40 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pha_backup
+  namespace: aitech
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1beta1
+metadata:
+  name: pha_backup
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+- kind: ServiceAccount
+  name: pha_backup
+  namespace: aitech
+---
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  name: pha_backup
+  namespace: aitech
+  labels:
+    app: pha_backup
+spec:
+  schedule: "0 0 * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: pha_backup
+          containers:
+          - name: pha_backup
+            image: registry.cn-shenzhen.aliyuncs.com/aios/phabricator_data_backup
+            imagePullPolicy: IfNotPresent
+          restartPolicy: OnFailure
+          imagePullSecrets:
+          - name: ali-secret
