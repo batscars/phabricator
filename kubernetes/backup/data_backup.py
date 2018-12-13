@@ -19,17 +19,22 @@ def exec_backup(namespace, label, command=["/bin/sh", "-c", "srv/phabricator/pha
     pods = k8s_coreapi.list_namespaced_pod(namespace=namespace, label_selector=label).items
     if len(pods) >= 1:
         pod = pods[0].metadata.name
+        logger.info("phabricator pod name is " + str(pod))
     else:
         logger.error("No pod found in namespace {} with label {}".format(namespace, label))
         return
+    logger.info("Start to backup phabricator data")
+    flag = 0
     try:
         resp = stream(k8s_coreapi.connect_get_namespaced_pod_exec, pod, namespace,
                 command=command,
                 stderr=True, stdin=False,
                 stdout=True, tty=False)
     except:
+        flag = 1
         logger.error("Exec into pod %s in namespace %s error" % (pod, namespace))
-
+    if flag == 0:
+        logger.info("Backup phabricator data successfully")
 
 def main():
     parser = argparse.ArgumentParser(description='phabricator data backup')
